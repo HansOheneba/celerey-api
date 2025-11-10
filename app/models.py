@@ -11,7 +11,7 @@ class Insights(db.Model):
     excerpt = db.Column(db.Text, nullable=False)
     cover_image = db.Column(db.String(500))
     content = db.Column(db.Text, nullable=False)
-    tags = db.Column(db.String(255))  # comma-separated list
+    tags = db.Column(db.String(255)) 
 
 
 class Podcasts(db.Model):
@@ -26,3 +26,18 @@ class Podcasts(db.Model):
     spotify_link = db.Column(db.String(500))
     spotify_embed_url = db.Column(db.String(500))
     tags = db.Column(db.String(255))
+
+
+class Advisors(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(255), unique=True, nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    bio = db.Column(db.Text, nullable=False)
+    experience = db.Column(db.Text, nullable=False)
+    expertise = db.Column(db.Text)  # comma-separated list
+    image = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

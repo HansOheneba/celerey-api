@@ -49,7 +49,6 @@ def get_podcast(id):
                 "description": podcast.description,
                 "spotify_link": podcast.spotify_link,
                 "spotify_embed_url": podcast.spotify_embed_url,
-                "transcript": podcast.transcript,
                 "tags": podcast.tags.split(",") if podcast.tags else [],
             }
         ),
@@ -82,7 +81,6 @@ def add_podcast():
         description=data.get("description"),
         spotify_link=data.get("spotify_link"),
         spotify_embed_url=data.get("spotify_embed_url"),
-        transcript=data.get("transcript"),
         tags=",".join(data.get("tags", [])),
     )
 
@@ -108,7 +106,6 @@ def update_podcast(id):
         "description",
         "spotify_link",
         "spotify_embed_url",
-        "transcript",
         "tags",
     ]:
         if field in data:
