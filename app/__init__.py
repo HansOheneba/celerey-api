@@ -1,32 +1,40 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+import mysql.connector
+from mysql.connector import pooling
 
-db = SQLAlchemy()
+# Database connection pool
+db_pool = None
+
 
 def create_app():
+    global db_pool
     load_dotenv()
     app = Flask(__name__)
     CORS(app)
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = (
-        f"mysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@"
-        f"{os.getenv('MYSQL_HOST')}/{os.getenv('MYSQL_DB')}"
-    )
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
-    
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "pool_recycle": 280,
-        "pool_pre_ping": True,
-        "pool_size": 3, 
-        "max_overflow": 5,
-        "pool_timeout": 30,
+    # Database configuration
+    db_config = {
+        "host": os.getenv("MYSQL_HOST"),
+        "user": os.getenv("MYSQL_USER"),
+        "password": os.getenv("MYSQL_PASSWORD"),
+        "database": os.getenv("MYSQL_DB"),
+        "port": os.getenv("MYSQL_PORT", 3306),
+        "pool_name": "mypool",
+        "pool_size": 3,
+        "pool_reset_session": True,
     }
 
-    db.init_app(app)
+    # Create connection pool
+    try:
+        db_pool = pooling.MySQLConnectionPool(**db_config)
+        print("Database connection pool created successfully")
+    except Exception as e:
+        print(f"Error creating connection pool: {e}")
+
+    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 
     from app.routes.insights import insights_bp
     from app.routes.podcasts import podcasts_bp
@@ -40,7 +48,11 @@ def create_app():
     app.register_blueprint(contact_bp, url_prefix="/api/contact")
     app.register_blueprint(webinars_bp, url_prefix="/api/webinars")
 
-    with app.app_context():
-        db.create_all()
-
     return app
+
+
+def get_db_connection():
+    """Get a database connection from the pool"""
+    if db_pool is None:
+        raise Exception("Database pool not initialized")
+    return db_pool.get_connection()

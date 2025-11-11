@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.models import Advisors, db
+from app.database import DBHelper
 from datetime import datetime
 
 advisors_bp = Blueprint("advisors_bp", __name__, url_prefix="/advisors")
@@ -8,159 +8,171 @@ advisors_bp = Blueprint("advisors_bp", __name__, url_prefix="/advisors")
 # 🟢 Get all advisors
 @advisors_bp.route("/", methods=["GET"])
 def get_advisors():
-    advisors = Advisors.query.order_by(Advisors.name.asc()).all()
-    return (
-        jsonify(
-            [
+    try:
+        query = "SELECT * FROM advisors ORDER BY name ASC"
+        advisors = DBHelper.execute_query(query, fetch_all=True)
+
+        result = []
+        for advisor in advisors:
+            result.append(
                 {
-                    "id": a.id,
-                    "slug": a.slug,
-                    "name": a.name,
-                    "title": a.title,
-                    "bio": a.bio,
-                    "experience": a.experience,
-                    "expertise": a.expertise.split(",") if a.expertise else [],
-                    "image": a.image,
-                    "created_at": (
-                        a.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                        if a.created_at
-                        else None
+                    "id": advisor["id"],
+                    "slug": advisor["slug"],
+                    "name": advisor["name"],
+                    "title": advisor["title"],
+                    "bio": advisor["bio"],
+                    "experience": advisor["experience"],
+                    "expertise": (
+                        advisor["expertise"].split(",") if advisor["expertise"] else []
                     ),
-                    "updated_at": (
-                        a.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                        if a.updated_at
-                        else None
-                    ),
+                    "image": advisor["image"],
+                    "created_at": DBHelper.format_datetime(advisor["created_at"]),
+                    "updated_at": DBHelper.format_datetime(advisor["updated_at"]),
                 }
-                for a in advisors
-            ]
-        ),
-        200,
-    )
+            )
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # 🟢 Get a single advisor by slug
 @advisors_bp.route("/<string:slug>", methods=["GET"])
 def get_advisor(slug):
-    advisor = Advisors.query.filter_by(slug=slug).first_or_404()
-    return (
-        jsonify(
-            {
-                "id": advisor.id,
-                "slug": advisor.slug,
-                "name": advisor.name,
-                "title": advisor.title,
-                "bio": advisor.bio,
-                "experience": advisor.experience,
-                "expertise": advisor.expertise.split(",") if advisor.expertise else [],
-                "image": advisor.image,
-                "created_at": (
-                    advisor.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                    if advisor.created_at
-                    else None
-                ),
-                "updated_at": (
-                    advisor.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                    if advisor.updated_at
-                    else None
-                ),
-            }
-        ),
-        200,
-    )
+    try:
+        query = "SELECT * FROM advisors WHERE slug = %s"
+        advisor = DBHelper.execute_query(query, (slug,), fetch_one=True)
 
+        if not advisor:
+            return jsonify({"error": "Advisor not found"}), 404
 
-# 🟢 Get a single advisor by ID
-@advisors_bp.route("/id/<int:id>", methods=["GET"])
-def get_advisor_by_id(id):
-    advisor = Advisors.query.get_or_404(id)
-    return (
-        jsonify(
-            {
-                "id": advisor.id,
-                "slug": advisor.slug,
-                "name": advisor.name,
-                "title": advisor.title,
-                "bio": advisor.bio,
-                "experience": advisor.experience,
-                "expertise": advisor.expertise.split(",") if advisor.expertise else [],
-                "image": advisor.image,
-                "created_at": (
-                    advisor.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                    if advisor.created_at
-                    else None
-                ),
-                "updated_at": (
-                    advisor.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                    if advisor.updated_at
-                    else None
-                ),
-            }
-        ),
-        200,
-    )
+        return (
+            jsonify(
+                {
+                    "id": advisor["id"],
+                    "slug": advisor["slug"],
+                    "name": advisor["name"],
+                    "title": advisor["title"],
+                    "bio": advisor["bio"],
+                    "experience": advisor["experience"],
+                    "expertise": (
+                        advisor["expertise"].split(",") if advisor["expertise"] else []
+                    ),
+                    "image": advisor["image"],
+                    "created_at": DBHelper.format_datetime(advisor["created_at"]),
+                    "updated_at": DBHelper.format_datetime(advisor["updated_at"]),
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # 🟢 Add a new advisor
 @advisors_bp.route("/", methods=["POST"])
 def add_advisor():
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    # Basic validation
-    required_fields = ["slug", "name", "title", "bio", "experience"]
-    for field in required_fields:
-        if field not in data:
-            return jsonify({"error": f"Missing required field: {field}"}), 400
+        # Basic validation
+        required_fields = ["slug", "name", "title", "bio", "experience"]
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
 
-    # Check if slug already exists
-    existing_advisor = Advisors.query.filter_by(slug=data["slug"]).first()
-    if existing_advisor:
-        return jsonify({"error": "Advisor with this slug already exists"}), 400
+        # Check if slug already exists
+        check_query = "SELECT id FROM advisors WHERE slug = %s"
+        existing_advisor = DBHelper.execute_query(
+            check_query, (data["slug"],), fetch_one=True
+        )
+        if existing_advisor:
+            return jsonify({"error": "Advisor with this slug already exists"}), 400
 
-    new_advisor = Advisors(
-        slug=data["slug"],
-        name=data["name"],
-        title=data["title"],
-        bio=data["bio"],
-        experience=data["experience"],
-        expertise=",".join(data.get("expertise", [])),
-        image=data.get("image"),
-    )
+        # Insert new advisor
+        insert_query = """
+            INSERT INTO advisors (slug, name, title, bio, experience, expertise, image, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        expertise_str = (
+            ",".join(data.get("expertise", [])) if data.get("expertise") else None
+        )
+        now = datetime.now()
 
-    db.session.add(new_advisor)
-    db.session.commit()
+        advisor_id = DBHelper.execute_query(
+            insert_query,
+            (
+                data["slug"],
+                data["name"],
+                data["title"],
+                data["bio"],
+                data["experience"],
+                expertise_str,
+                data.get("image"),
+                now,
+                now,
+            ),
+            lastrowid=True,
+        )
 
-    return jsonify({"message": "Advisor added successfully", "id": new_advisor.id}), 201
+        return jsonify({"message": "Advisor added successfully", "id": advisor_id}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-
+# 🟢 Update advisor
 @advisors_bp.route("/<int:id>", methods=["PUT"])
 def update_advisor(id):
-    advisor = Advisors.query.get_or_404(id)
-    data = request.get_json()
+    try:
+        # Check if advisor exists
+        check_query = "SELECT id FROM advisors WHERE id = %s"
+        existing_advisor = DBHelper.execute_query(check_query, (id,), fetch_one=True)
+        if not existing_advisor:
+            return jsonify({"error": "Advisor not found"}), 404
 
-    for field in [
-        "slug",
-        "name",
-        "title",
-        "bio",
-        "experience",
-        "image",
-    ]:
-        if field in data:
-            setattr(advisor, field, data[field])
+        data = request.get_json()
+        update_fields = []
+        params = []
 
-    if "expertise" in data and isinstance(data["expertise"], list):
-        advisor.expertise = ",".join(data["expertise"])
+        for field in ["slug", "name", "title", "bio", "experience", "image"]:
+            if field in data:
+                update_fields.append(f"{field} = %s")
+                params.append(data[field])
 
-    db.session.commit()
-    return jsonify({"message": "Advisor updated successfully"}), 200
+        if "expertise" in data and isinstance(data["expertise"], list):
+            update_fields.append("expertise = %s")
+            params.append(",".join(data["expertise"]))
+
+        update_fields.append("updated_at = %s")
+        params.append(datetime.now())
+        params.append(id)
+
+        update_query = f"UPDATE advisors SET {', '.join(update_fields)} WHERE id = %s"
+        DBHelper.execute_query(update_query, params)
+
+        return jsonify({"message": "Advisor updated successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-
+# 🟢 Delete advisor
 @advisors_bp.route("/<int:id>", methods=["DELETE"])
 def delete_advisor(id):
-    advisor = Advisors.query.get_or_404(id)
-    db.session.delete(advisor)
-    db.session.commit()
-    return jsonify({"message": "Advisor deleted successfully"}), 200
+    try:
+        # Check if advisor exists
+        check_query = "SELECT id FROM advisors WHERE id = %s"
+        existing_advisor = DBHelper.execute_query(check_query, (id,), fetch_one=True)
+        if not existing_advisor:
+            return jsonify({"error": "Advisor not found"}), 404
+
+        delete_query = "DELETE FROM advisors WHERE id = %s"
+        DBHelper.execute_query(delete_query, (id,))
+
+        return jsonify({"message": "Advisor deleted successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

@@ -1,6 +1,5 @@
 Flask
 Flask-RESTful
-Flask-SQLAlchemy
 Flask-Cors
 python-dotenv
-mysqlclient
+mysql-connector-python

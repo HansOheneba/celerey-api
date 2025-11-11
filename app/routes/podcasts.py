@@ -1,133 +1,190 @@
 from flask import Blueprint, jsonify, request
-from app.models import Podcasts, db
+from app.database import DBHelper
 from datetime import datetime
 
 podcasts_bp = Blueprint("podcasts_bp", __name__, url_prefix="/podcasts")
 
 
-# 🟢 Get all podcasts
 @podcasts_bp.route("/", methods=["GET"])
 def get_podcasts():
-    podcasts = Podcasts.query.order_by(Podcasts.date.desc()).all()
-    return (
-        jsonify(
-            [
+    try:
+        query = "SELECT * FROM podcasts ORDER BY date DESC"
+        podcasts = DBHelper.execute_query(query, fetch_all=True)
+
+        result = []
+        for p in podcasts:
+            result.append(
                 {
-                    "id": p.id,
-                    "slug": p.slug,
-                    "title": p.title,
-                    "host": p.host,
-                    "duration": p.duration,
-                    "date": p.date.strftime("%Y-%m-%d") if p.date else None,
-                    "image": p.image,
-                    "description": p.description,
-                    "spotify_link": p.spotify_link,
-                    "spotify_embed_url": p.spotify_embed_url,
-                    "tags": p.tags.split(",") if p.tags else [],
+                    "id": p["id"],
+                    "slug": p["slug"],
+                    "title": p["title"],
+                    "host": p["host"],
+                    "duration": p["duration"],
+                    "date": DBHelper.format_date(p["date"]),
+                    "image": p["image"],
+                    "description": p["description"],
+                    "spotify_link": p["spotify_link"],
+                    "spotify_embed_url": p["spotify_embed_url"],
+                    "tags": p["tags"].split(",") if p["tags"] else [],
                 }
-                for p in podcasts
-            ]
-        ),
-        200,
-    )
+            )
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# 🟢 Get a single podcast by ID
 @podcasts_bp.route("/<int:id>", methods=["GET"])
 def get_podcast(id):
-    podcast = Podcasts.query.get_or_404(id)
-    return (
-        jsonify(
-            {
-                "id": podcast.id,
-                "slug": podcast.slug,
-                "title": podcast.title,
-                "host": podcast.host,
-                "duration": podcast.duration,
-                "date": podcast.date.strftime("%Y-%m-%d") if podcast.date else None,
-                "image": podcast.image,
-                "description": podcast.description,
-                "spotify_link": podcast.spotify_link,
-                "spotify_embed_url": podcast.spotify_embed_url,
-                "tags": podcast.tags.split(",") if podcast.tags else [],
-            }
-        ),
-        200,
-    )
+    try:
+        query = "SELECT * FROM podcasts WHERE id = %s"
+        podcast = DBHelper.execute_query(query, (id,), fetch_one=True)
+
+        if not podcast:
+            return jsonify({"error": "Podcast not found"}), 404
+
+        return (
+            jsonify(
+                {
+                    "id": podcast["id"],
+                    "slug": podcast["slug"],
+                    "title": podcast["title"],
+                    "host": podcast["host"],
+                    "duration": podcast["duration"],
+                    "date": DBHelper.format_date(podcast["date"]),
+                    "image": podcast["image"],
+                    "description": podcast["description"],
+                    "spotify_link": podcast["spotify_link"],
+                    "spotify_embed_url": podcast["spotify_embed_url"],
+                    "tags": podcast["tags"].split(",") if podcast["tags"] else [],
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# 🟢 Add a new podcast
 @podcasts_bp.route("/", methods=["POST"])
 def add_podcast():
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    # Basic validation
-    required_fields = ["slug", "title"]
-    for field in required_fields:
-        if field not in data:
-            return jsonify({"error": f"Missing required field: {field}"}), 400
+        # Basic validation
+        required_fields = ["slug", "title"]
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"Missing required field: {field}"}), 400
 
-    new_podcast = Podcasts(
-        slug=data["slug"],
-        title=data["title"],
-        host=data.get("host"),
-        duration=data.get("duration"),
-        date=(
-            datetime.strptime(data.get("date"), "%Y-%m-%d")
-            if data.get("date")
-            else None
-        ),
-        image=data.get("image"),
-        description=data.get("description"),
-        spotify_link=data.get("spotify_link"),
-        spotify_embed_url=data.get("spotify_embed_url"),
-        tags=",".join(data.get("tags", [])),
-    )
+        # Check if slug exists
+        slug_check = "SELECT id FROM podcasts WHERE slug = %s"
+        existing = DBHelper.execute_query(slug_check, (data["slug"],), fetch_one=True)
+        if existing:
+            return jsonify({"error": "Slug already exists"}), 400
 
-    db.session.add(new_podcast)
-    db.session.commit()
+        insert_query = """
+            INSERT INTO podcasts (slug, title, host, duration, date, image, description, spotify_link, spotify_embed_url, tags)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
 
-    return jsonify({"message": "Podcast added successfully", "id": new_podcast.id}), 201
+        # Parse date if provided
+        podcast_date = None
+        if data.get("date"):
+            try:
+                podcast_date = DBHelper.parse_date(data["date"])
+            except ValueError:
+                return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+        tags_str = ",".join(data.get("tags", [])) if data.get("tags") else None
+
+        podcast_id = DBHelper.execute_query(
+            insert_query,
+            (
+                data["slug"],
+                data["title"],
+                data.get("host"),
+                data.get("duration"),
+                podcast_date,
+                data.get("image"),
+                data.get("description"),
+                data.get("spotify_link"),
+                data.get("spotify_embed_url"),
+                tags_str,
+            ),
+            lastrowid=True,
+        )
+
+        return jsonify({"message": "Podcast added successfully", "id": podcast_id}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# 🟢 Update existing podcast
 @podcasts_bp.route("/<int:id>", methods=["PUT"])
 def update_podcast(id):
-    podcast = Podcasts.query.get_or_404(id)
-    data = request.get_json()
+    try:
+        # Check if podcast exists
+        check_query = "SELECT id FROM podcasts WHERE id = %s"
+        existing = DBHelper.execute_query(check_query, (id,), fetch_one=True)
+        if not existing:
+            return jsonify({"error": "Podcast not found"}), 404
 
-    # Update fields safely
-    for field in [
-        "slug",
-        "title",
-        "host",
-        "duration",
-        "image",
-        "description",
-        "spotify_link",
-        "spotify_embed_url",
-        "tags",
-    ]:
-        if field in data:
-            value = data[field]
-            if field == "tags" and isinstance(value, list):
-                value = ",".join(value)
-            setattr(podcast, field, value)
+        data = request.get_json()
+        update_fields = []
+        params = []
 
-    if "date" in data and data["date"]:
-        try:
-            podcast.date = datetime.strptime(data["date"], "%Y-%m-%d")
-        except ValueError:
-            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+        for field in [
+            "slug",
+            "title",
+            "host",
+            "duration",
+            "image",
+            "description",
+            "spotify_link",
+            "spotify_embed_url",
+        ]:
+            if field in data:
+                update_fields.append(f"{field} = %s")
+                params.append(data[field])
 
-    db.session.commit()
-    return jsonify({"message": "Podcast updated successfully"}), 200
+        if "tags" in data and isinstance(data["tags"], list):
+            update_fields.append("tags = %s")
+            params.append(",".join(data["tags"]))
+
+        if "date" in data and data["date"]:
+            try:
+                podcast_date = DBHelper.parse_date(data["date"])
+                update_fields.append("date = %s")
+                params.append(podcast_date)
+            except ValueError:
+                return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+        params.append(id)
+
+        update_query = f"UPDATE podcasts SET {', '.join(update_fields)} WHERE id = %s"
+        DBHelper.execute_query(update_query, params)
+
+        return jsonify({"message": "Podcast updated successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# 🟢 Delete a podcast
 @podcasts_bp.route("/<int:id>", methods=["DELETE"])
 def delete_podcast(id):
-    podcast = Podcasts.query.get_or_404(id)
-    db.session.delete(podcast)
-    db.session.commit()
-    return jsonify({"message": "Podcast deleted successfully"}), 200
+    try:
+        # Check if podcast exists
+        check_query = "SELECT id FROM podcasts WHERE id = %s"
+        existing = DBHelper.execute_query(check_query, (id,), fetch_one=True)
+        if not existing:
+            return jsonify({"error": "Podcast not found"}), 404
+
+        delete_query = "DELETE FROM podcasts WHERE id = %s"
+        DBHelper.execute_query(delete_query, (id,))
+
+        return jsonify({"message": "Podcast deleted successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
