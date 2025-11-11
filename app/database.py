@@ -13,6 +13,9 @@ class DBHelper:
             connection = get_db_connection()
             cursor = connection.cursor(dictionary=True)
 
+            print(f"Executing query: {query}")
+            print(f"With params: {params}")
+
             cursor.execute(query, params or ())
 
             if fetch_one:
@@ -24,18 +27,24 @@ class DBHelper:
             else:
                 result = None
 
-            if not fetch_one and not fetch_all and not lastrowid:
+            # Always commit for INSERT, UPDATE, DELETE operations
+            if not fetch_one and not fetch_all:
+                print("Committing transaction...")
                 connection.commit()
+                print("Transaction committed successfully")
 
             cursor.close()
             return result
 
         except Exception as e:
             if connection:
+                print("Rolling back transaction due to error")
                 connection.rollback()
+            print(f"Database error: {str(e)}")
             raise e
         finally:
             if connection:
+                print("Closing database connection")
                 connection.close()
 
     @staticmethod

@@ -176,3 +176,13 @@ def delete_advisor(id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@advisors_bp.route("/table-schema", methods=["GET"])
+def table_schema():
+    try:
+        query = "DESCRIBE advisors"
+        schema = DBHelper.execute_query(query, fetch_all=True)
+        return jsonify({"schema": schema}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
