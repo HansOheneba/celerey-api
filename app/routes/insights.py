@@ -18,9 +18,7 @@ def get_insights():
                     "id": i["id"],
                     "title": i["title"],
                     "slug": i["slug"],
-                    "author": i["author"],
                     "date": DBHelper.format_date(i["date"]),
-                    "excerpt": i["excerpt"],
                     "cover_image": i["cover_image"],
                     "content": i["content"],
                     "tags": i["tags"].split(",") if i["tags"] else [],
@@ -37,9 +35,10 @@ def get_insights():
 def add_insight():
     try:
         data = request.json
+        print("Received data:", data)  # Debug log
 
         # Basic validation
-        required_fields = ["title", "slug", "author", "excerpt", "content"]
+        required_fields = ["title", "slug", "content"]
         for field in required_fields:
             if not data.get(field):
                 return jsonify({"error": f"Missing required field: {field}"}), 400
@@ -51,10 +50,11 @@ def add_insight():
             return jsonify({"error": "Slug already exists"}), 400
 
         insert_query = """
-            INSERT INTO insights (title, slug, author, excerpt, cover_image, content, tags, date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO insights (title, slug, cover_image, content, tags, date)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
 
+        # Handle tags - convert list to comma-separated string
         tags_str = ",".join(data.get("tags", [])) if data.get("tags") else None
 
         insight_id = DBHelper.execute_query(
@@ -62,9 +62,7 @@ def add_insight():
             (
                 data["title"],
                 data["slug"],
-                data["author"],
-                data["excerpt"],
-                data.get("cover_image"),
+                data.get("coverImage"),  # Note: React sends coverImage
                 data["content"],
                 tags_str,
                 datetime.now(),
@@ -75,6 +73,7 @@ def add_insight():
         return jsonify({"message": "Insight added successfully", "id": insight_id}), 201
 
     except Exception as e:
+        print("Error:", str(e))  # Debug log
         return jsonify({"error": str(e)}), 500
 
 
@@ -91,10 +90,17 @@ def update_insight(id):
         update_fields = []
         params = []
 
-        for field in ["title", "slug", "author", "excerpt", "cover_image", "content"]:
-            if field in data:
-                update_fields.append(f"{field} = %s")
-                params.append(data[field])
+        field_mapping = {
+            "title": "title",
+            "slug": "slug",
+            "coverImage": "cover_image",  # Map React field to DB field
+            "content": "content",
+        }
+
+        for react_field, db_field in field_mapping.items():
+            if react_field in data:
+                update_fields.append(f"{db_field} = %s")
+                params.append(data[react_field])
 
         if "tags" in data and isinstance(data["tags"], list):
             update_fields.append("tags = %s")
