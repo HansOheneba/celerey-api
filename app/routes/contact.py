@@ -100,22 +100,21 @@ def submit_contact_message():
     try:
         data = request.get_json()
 
-        # Basic validation
         required_fields = ["full_name", "email", "message"]
         for field in required_fields:
             if not data.get(field):
                 return jsonify({"error": f"Missing required field: {field}"}), 400
 
-        # Email validation
         if "@" not in data["email"]:
             return jsonify({"error": "Invalid email format"}), 400
+
+        now = datetime.now()
 
         insert_query = """
             INSERT INTO contact_messages (full_name, email, subject, message, status, created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
 
-        now = datetime.now()
         message_id = DBHelper.execute_query(
             insert_query,
             (
@@ -129,6 +128,15 @@ def submit_contact_message():
             ),
             lastrowid=True,
         )
+
+        # ---- NEW: also save to leads table ----
+        lead_query = """
+            INSERT INTO leads (email, source, created_at)
+            VALUES (%s, %s, %s)
+        """
+
+        DBHelper.execute_query(lead_query, (data["email"], "contact_form", now))
+        # --------------------------------------
 
         return (
             jsonify(

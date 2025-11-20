@@ -42,6 +42,8 @@ def create_app():
     from app.routes.contact import contact_bp
     from app.routes.webinars import webinars_bp
     from app.routes.plans import plans_bp
+    from app.routes.leads import leads_bp
+    
 
     app.register_blueprint(insights_bp, url_prefix="/api/insights")
     app.register_blueprint(podcasts_bp, url_prefix="/api/podcasts")
@@ -49,6 +51,7 @@ def create_app():
     app.register_blueprint(contact_bp, url_prefix="/api/contact")
     app.register_blueprint(webinars_bp, url_prefix="/api/webinars")
     app.register_blueprint(plans_bp, url_prefix="/api/plans")
+    app.register_blueprint(leads_bp, url_prefix="/api/leads")
 
     return app
 
