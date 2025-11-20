@@ -19,7 +19,7 @@ def get_leads():
         # Optional filter by source
         source = request.args.get("source")
         params = []
-        if source in ["newsletter", "health_scan", "contact_form"]:
+        if source in ["newsletter", "wealth_scan", "contact_form"]:
             where_clause = " WHERE source = %s"
             base_query += where_clause
             count_query += where_clause
@@ -71,7 +71,7 @@ def add_lead():
             return jsonify({"error": "Invalid email format"}), 400
 
         source = data.get("source", "newsletter")
-        if source not in ["newsletter", "health_scan", "contact_form"]:
+        if source not in ["newsletter", "wealth_scan", "contact_form"]:
             return jsonify({"error": "Invalid source"}), 400
 
         insert_query = """
