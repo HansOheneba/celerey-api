@@ -23,9 +23,10 @@ def get_plans():
                     "id": plan["id"],
                     "name": plan["name"],
                     "description": plan["description"],
+                    "tagline": plan["tagline"],  # Add this line
                     "price": float(plan["price"]) if plan["price"] else None,
                     "billing_cycle": plan["billing_cycle"],
-                    "features": features,  
+                    "features": features,
                     "payment_link": plan["payment_link"],
                     "button_text": plan["button_text"],
                     "popular": bool(plan["popular"]),
@@ -59,9 +60,10 @@ def get_plan(id):
                     "id": plan["id"],
                     "name": plan["name"],
                     "description": plan["description"],
+                    "tagline": plan["tagline"],  # Add this line
                     "price": float(plan["price"]) if plan["price"] else None,
                     "billing_cycle": plan["billing_cycle"],
-                    "features": features,  # This is now a proper array
+                    "features": features,
                     "payment_link": plan["payment_link"],
                     "button_text": plan["button_text"],
                     "popular": bool(plan["popular"]),
@@ -83,7 +85,14 @@ def add_plan():
         data = request.get_json()
 
         # Basic validation
-        required_fields = ["name", "description", "price", "billing_cycle", "features"]
+        required_fields = [
+            "name",
+            "description",
+            "tagline",
+            "price",
+            "billing_cycle",
+            "features",
+        ]  # Updated
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": f"Missing required field: {field}"}), 400
@@ -98,9 +107,9 @@ def add_plan():
 
         # Insert new plan
         insert_query = """
-            INSERT INTO plans (name, description, price, billing_cycle, features, 
+            INSERT INTO plans (name, description, tagline, price, billing_cycle, features, 
                              payment_link, button_text, popular, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         # Convert features list to JSON string
@@ -113,6 +122,7 @@ def add_plan():
             (
                 data["name"],
                 data["description"],
+                data["tagline"],  # Add this line
                 data["price"],
                 data["billing_cycle"],
                 features_json,
@@ -148,6 +158,7 @@ def update_plan(id):
         for field in [
             "name",
             "description",
+            "tagline",  # Add this line
             "price",
             "billing_cycle",
             "payment_link",
@@ -178,7 +189,7 @@ def update_plan(id):
         return jsonify({"error": str(e)}), 500
 
 
-# 🟢 Delete plan
+# 🟢 Delete plan (remains the same)
 @plans_bp.route("/<int:id>", methods=["DELETE"])
 def delete_plan(id):
     try:
