@@ -13,7 +13,21 @@ def create_app():
     global db_pool
     load_dotenv()
     app = Flask(__name__)
-    CORS(app)
+
+    CORS(
+        app,
+        resources={
+            r"/api/*": {
+                "origins": [
+                    "http://localhost:3000", 
+                    "http://127.0.0.1:3000",
+                    "https://celereyv2.vercel.app/",  
+                ],
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization"],
+            }
+        },
+    )
 
     # Database configuration
     db_config = {
@@ -43,7 +57,6 @@ def create_app():
     from app.routes.webinars import webinars_bp
     from app.routes.plans import plans_bp
     from app.routes.leads import leads_bp
-    
 
     app.register_blueprint(insights_bp, url_prefix="/api/insights")
     app.register_blueprint(podcasts_bp, url_prefix="/api/podcasts")
