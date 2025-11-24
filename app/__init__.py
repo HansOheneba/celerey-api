@@ -14,20 +14,7 @@ def create_app():
     load_dotenv()
     app = Flask(__name__)
 
-    CORS(
-        app,
-        resources={
-            r"/api/*": {
-                "origins": [
-                    "http://localhost:3000", 
-                    "http://127.0.0.1:3000",
-                    "https://celereyv2.vercel.app/",  
-                ],
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization"],
-            }
-        },
-    )
+    CORS(app, origins="*", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
     # Database configuration
     db_config = {
