@@ -21,7 +21,7 @@ def create_app():
                 "origins": [
                     "http://localhost:3000", 
                     "http://127.0.0.1:3000",
-                    "https://celereyv2.vercel.app/",  
+                    "https://celereyv2.vercel.app",  
                 ],
                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                 "allow_headers": ["Content-Type", "Authorization"],
