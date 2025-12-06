@@ -29,25 +29,28 @@ def create_app():
         },
     )
 
-    # Database configuration
-    db_config = {
-        "host": os.getenv("MYSQL_HOST"),
-        "user": os.getenv("MYSQL_USER"),
-        "password": os.getenv("MYSQL_PASSWORD"),
-        "database": os.getenv("MYSQL_DB"),
-        "port": os.getenv("MYSQL_PORT", 3306),
-        "pool_name": "mypool",
-        "pool_size": 3,
-        "pool_reset_session": True,
-    }
+load_dotenv()
 
-    # Create connection pool
-    try:
-        db_pool = pooling.MySQLConnectionPool(**db_config)
-        print("Database connection pool created successfully")
-    except Exception as e:
-        print(f"Error creating connection pool: {e}")
+db_config = {
+    "host": os.getenv("MYSQL_HOST"),
+    "user": os.getenv("MYSQL_USER"),
+    "password": os.getenv("MYSQL_PASSWORD"),
+    "database": os.getenv("MYSQL_DB"),
+    "port": os.getenv("MYSQL_PORT", 3306),
+    "pool_name": "mypool",
+    "pool_size": 3,
+    "pool_reset_session": True,
+}
 
+try:
+    db_pool = pooling.MySQLConnectionPool(**db_config)
+    print("Database pool created successfully")
+except Exception as e:
+    print(f"Error creating connection pool: {e}")
+
+
+def create_app():
+    app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 
     from app.routes.insights import insights_bp
