@@ -2,41 +2,21 @@ from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
-import mysql.connector
 from mysql.connector import pooling
+
+# Load environment variables
+load_dotenv()
 
 # Database connection pool
 db_pool = None
 
-
-def create_app():
-    global db_pool
-    load_dotenv()
-    app = Flask(__name__)
-
-    CORS(
-        app,
-        resources={
-            r"/api/*": {
-                "origins": [
-                    "http://localhost:3000", 
-                    "http://127.0.0.1:3000",
-                    "https://celereyv2.vercel.app",  
-                ],
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization"],
-            }
-        },
-    )
-
-load_dotenv()
-
+# Configure DB pool
 db_config = {
     "host": os.getenv("MYSQL_HOST"),
     "user": os.getenv("MYSQL_USER"),
     "password": os.getenv("MYSQL_PASSWORD"),
     "database": os.getenv("MYSQL_DB"),
-    "port": os.getenv("MYSQL_PORT", 3306),
+    "port": int(os.getenv("MYSQL_PORT", 3306)),
     "pool_name": "mypool",
     "pool_size": 3,
     "pool_reset_session": True,
@@ -53,6 +33,22 @@ def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 
+    # --- CORS Setup ---
+    CORS(
+        app,
+        resources={
+            r"/api/*": {
+                "origins": [
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000",
+                    "https://celereyv2.vercel.app",
+                ]
+            }
+        },
+        supports_credentials=True,
+    )
+
+    # --- Register Blueprints ---
     from app.routes.insights import insights_bp
     from app.routes.podcasts import podcasts_bp
     from app.routes.advisors import advisors_bp
