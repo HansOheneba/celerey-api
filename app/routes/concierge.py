@@ -16,6 +16,11 @@ def add_cors_headers(response):
     response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
+@concierge_bp.route("/", methods=["OPTIONS"])
+def options_root():
+    """Handle preflight OPTIONS request"""
+    return make_response(("", 200))
+
 email_service = EmailService()
 
 def send_concierge_admin_notification_async(submission_id: int, submission_data: dict):
@@ -263,8 +268,3 @@ def get_concierge_request(request_id):
             "error": "SERVER_ERROR",
             "message": "Something went wrong."
         }), 500
-
-@concierge_bp.route("/", methods=["OPTIONS"])
-def options_root():
-    """Handle preflight OPTIONS request"""
-    return make_response(("", 200))
