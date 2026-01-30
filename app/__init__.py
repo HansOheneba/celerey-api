@@ -60,6 +60,7 @@ def create_app():
     from app.routes.leads import leads_bp
     from app.routes.services import services_bp
     from app.routes.start import start_bp
+    from app.routes.concierge import concierge_bp
 
     app.register_blueprint(insights_bp, url_prefix="/api/insights")
     app.register_blueprint(podcasts_bp, url_prefix="/api/podcasts")
@@ -70,6 +71,7 @@ def create_app():
     app.register_blueprint(leads_bp, url_prefix="/api/leads")
     app.register_blueprint(services_bp, url_prefix="/api/services")
     app.register_blueprint(start_bp, url_prefix="/api/start")
+    app.register_blueprint(concierge_bp, url_prefix="/api/concierge")
 
     return app
 
