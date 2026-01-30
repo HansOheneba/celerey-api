@@ -30,6 +30,10 @@ def send_admin_notification_async(lead_id: int, lead_data: dict):
             print(f"⚠️  Failed to send admin notification for lead {lead_id}: {result.get('error')}")
     except Exception as e:
         print(f"✗ Error in notification thread: {str(e)}")
+    finally:
+        # IMPORTANT: Clean up any resources
+        import gc
+        gc.collect()
 
 # Helper functions
 def validate_email(email):
@@ -123,7 +127,8 @@ def begin_journey():
                 target=send_admin_notification_async,
                 args=(lead_id, lead_data)
             )
-            thread.daemon = True
+            # Remove daemon=True or set to False - keeps thread alive until completion
+            thread.daemon = False
             thread.start()
             print(f"Started admin notification for lead {lead_id}")
         else:

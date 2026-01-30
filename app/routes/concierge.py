@@ -57,6 +57,10 @@ def send_concierge_admin_notification_async(submission_id: int, submission_data:
             print(f"⚠️ Failed to send concierge admin notification for submission {submission_id}: {result.get('error')}")
     except Exception as e:
         print(f"✗ Error in concierge notification thread: {str(e)}")
+    finally:
+        # IMPORTANT: Clean up any resources
+        import gc
+        gc.collect()
 
 # Helper functions
 def validate_email(email):
@@ -178,7 +182,8 @@ def create_concierge_request():
                 target=send_concierge_admin_notification_async,
                 args=(submission_id, submission_data)
             )
-            thread.daemon = True
+            # Remove daemon=True or set to False - keeps thread alive until completion
+            thread.daemon = False
             thread.start()
             print(f"Started concierge admin notification for submission {submission_id}")
         else:
