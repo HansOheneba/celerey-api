@@ -57,6 +57,7 @@ def create_app():
     from app.routes.plans import plans_bp
     from app.routes.leads import leads_bp
     from app.routes.services import services_bp
+    from app.routes.start import start_bp
 
     app.register_blueprint(insights_bp, url_prefix="/api/insights")
     app.register_blueprint(podcasts_bp, url_prefix="/api/podcasts")
@@ -66,6 +67,7 @@ def create_app():
     app.register_blueprint(plans_bp, url_prefix="/api/plans")
     app.register_blueprint(leads_bp, url_prefix="/api/leads")
     app.register_blueprint(services_bp, url_prefix="/api/services")
+    app.register_blueprint(start_bp, url_prefix="/api/start")
 
     return app
 
