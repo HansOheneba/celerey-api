@@ -37,11 +37,13 @@ def create_app():
     CORS(
         app,
         resources={
-            r"/api/*": {
+            # broaden to all routes so preflight receives headers reliably
+            r"/*": {
                 "origins": [
                     "http://localhost:3000",
                     "http://127.0.0.1:3000",
                     "https://celereyv2.vercel.app",
+                    "https://celerey-api.vercel.app",
                 ]
             }
         },

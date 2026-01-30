@@ -1,16 +1,18 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, make_response
 from app.database import DBHelper
 from datetime import datetime
 from app.services.email import EmailService
 import re
+import threading
 
-start_bp = Blueprint("start_bp", __name__, url_prefix="/start")
+start_bp = Blueprint("start_bp", __name__)
 
 @start_bp.after_request
 def add_cors_headers(response):
     response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
 email_service = EmailService()
@@ -211,29 +213,7 @@ def get_lead(lead_id):
             "message": "Something went wrong."
         }), 500
     
-    
-@start_bp.route("/", methods=["GET"])
-def get_all_leads():
-    """Get all leads"""
-    try:
-        leads = DBHelper.execute_query("SELECT * FROM support_leads ORDER BY created_at DESC", fetch_all=True)
-        
-        # Simple formatting
-        formatted = []
-        for lead in leads:
-            formatted.append({
-                "id": lead["id"],
-                "firstName": lead["first_name"],
-                "lastName": lead["last_name"],
-                "email": lead["email"],
-                "phone": lead["phone"],
-                "timeZone": lead["time_zone"],
-                "status": lead["status"],
-                "createdAt": str(lead["created_at"])
-            })
-        
-        return jsonify({"ok": True, "leads": formatted}), 200
-    
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return jsonify({"ok": False, "error": "Server error"}), 500
+@start_bp.route("/", methods=["OPTIONS"])
+def options_root():
+    """Handle preflight OPTIONS request"""
+    return make_response(("", 200))
