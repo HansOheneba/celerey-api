@@ -10,16 +10,37 @@ concierge_bp = Blueprint("concierge_bp", __name__)
 
 @concierge_bp.after_request
 def add_cors_headers(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    """Add CORS headers to all responses"""
+    # Allow specific origins (add your frontend URLs)
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000", 
+        "https://celereyv2.vercel.app",
+        "https://celerey-api.vercel.app"
+    ]
+    
+    origin = request.headers.get('Origin')
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    
     response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    response.headers.add('Access-Control-Max-Age', '86400')  # 24 hours
+    
     return response
 
 @concierge_bp.route("/", methods=["OPTIONS"])
-def options_root():
-    """Handle preflight OPTIONS request"""
-    return make_response(("", 200))
+@concierge_bp.route("/<int:request_id>", methods=["OPTIONS"])
+def options_handler(request_id=None):
+    """Handle preflight OPTIONS request - FIX THE REDIRECT ISSUE HERE"""
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    response.headers.add('Access-Control-Max-Age', '86400')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response, 200
 
 email_service = EmailService()
 
@@ -50,7 +71,8 @@ def validate_phone(phone):
     digits = ''.join(filter(str.isdigit, phone))
     return len(digits) >= 10
 
-@concierge_bp.route("/", methods=["POST"])
+@concierge_bp.route("", methods=["POST"], strict_slashes=False)
+@concierge_bp.route("/", methods=["POST"], strict_slashes=False)
 def create_concierge_request():
     """Create a new concierge service request"""
     try:
