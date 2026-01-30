@@ -5,8 +5,12 @@ from app.services.email import EmailService
 import re
 import threading
 import json
+import time
 
 concierge_bp = Blueprint("concierge_bp", __name__)
+
+# Global list to track active threads
+active_email_threads = []
 
 @concierge_bp.after_request
 def add_cors_headers(response):
@@ -49,6 +53,9 @@ def send_concierge_admin_notification_async(submission_id: int, submission_data:
     if not email_service.enabled:
         return
     
+    # Small delay to ensure Flask response is sent first
+    time.sleep(0.5)
+    
     try:
         result = email_service.send_concierge_notification(submission_data)
         if result.get("ok"):
@@ -57,10 +64,11 @@ def send_concierge_admin_notification_async(submission_id: int, submission_data:
             print(f"⚠️ Failed to send concierge admin notification for submission {submission_id}: {result.get('error')}")
     except Exception as e:
         print(f"✗ Error in concierge notification thread: {str(e)}")
-    finally:
-        # IMPORTANT: Clean up any resources
-        import gc
-        gc.collect()
+
+def cleanup_completed_threads():
+    """Clean up completed threads from the global list"""
+    global active_email_threads
+    active_email_threads = [t for t in active_email_threads if t.is_alive()]
 
 # Helper functions
 def validate_email(email):
@@ -180,12 +188,24 @@ def create_concierge_request():
         if email_service.enabled and email_service.admin_emails:
             thread = threading.Thread(
                 target=send_concierge_admin_notification_async,
-                args=(submission_id, submission_data)
+                args=(submission_id, submission_data),
+                name=f"concierge-email-{submission_id}"
             )
-            # Remove daemon=True or set to False - keeps thread alive until completion
-            thread.daemon = False
+            thread.daemon = False  # Keep thread alive until completion
+            
+            # Clean up old threads before starting new one
+            cleanup_completed_threads()
+            
+            # Add to global tracking
+            active_email_threads.append(thread)
+            
             thread.start()
+            
+            # Wait a tiny bit to ensure thread starts (non-blocking)
+            time.sleep(0.1)
+            
             print(f"Started concierge admin notification for submission {submission_id}")
+            print(f"Active email threads: {len([t for t in active_email_threads if t.is_alive()])}")
         else:
             print(f"No email notification sent for concierge submission {submission_id} (service disabled or no recipients)")
         

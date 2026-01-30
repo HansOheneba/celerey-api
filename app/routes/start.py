@@ -4,8 +4,12 @@ from datetime import datetime
 from app.services.email import EmailService
 import re
 import threading
+import time
 
 start_bp = Blueprint("start_bp", __name__)
+
+# Global list to track active threads
+active_lead_threads = []
 
 @start_bp.after_request
 def add_cors_headers(response):
@@ -22,6 +26,9 @@ def send_admin_notification_async(lead_id: int, lead_data: dict):
     if not email_service.enabled:
         return
     
+    # Small delay to ensure Flask response is sent first
+    time.sleep(0.5)
+    
     try:
         result = email_service.send_lead_notification(lead_data)
         if result.get("ok"):
@@ -30,10 +37,11 @@ def send_admin_notification_async(lead_id: int, lead_data: dict):
             print(f"⚠️  Failed to send admin notification for lead {lead_id}: {result.get('error')}")
     except Exception as e:
         print(f"✗ Error in notification thread: {str(e)}")
-    finally:
-        # IMPORTANT: Clean up any resources
-        import gc
-        gc.collect()
+
+def cleanup_completed_threads():
+    """Clean up completed threads from the global list"""
+    global active_lead_threads
+    active_lead_threads = [t for t in active_lead_threads if t.is_alive()]
 
 # Helper functions
 def validate_email(email):
@@ -125,12 +133,24 @@ def begin_journey():
         if email_service.enabled and email_service.admin_emails:
             thread = threading.Thread(
                 target=send_admin_notification_async,
-                args=(lead_id, lead_data)
+                args=(lead_id, lead_data),
+                name=f"lead-email-{lead_id}"
             )
-            # Remove daemon=True or set to False - keeps thread alive until completion
-            thread.daemon = False
+            thread.daemon = False  # Keep thread alive until completion
+            
+            # Clean up old threads before starting new one
+            cleanup_completed_threads()
+            
+            # Add to global tracking
+            active_lead_threads.append(thread)
+            
             thread.start()
+            
+            # Wait a tiny bit to ensure thread starts (non-blocking)
+            time.sleep(0.1)
+            
             print(f"Started admin notification for lead {lead_id}")
+            print(f"Active lead threads: {len([t for t in active_lead_threads if t.is_alive()])}")
         else:
             print(f"No email notification sent for lead {lead_id} (service disabled or no recipients)")
         
