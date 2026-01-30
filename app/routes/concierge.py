@@ -89,7 +89,7 @@ def create_concierge_request():
         contact = data.get("contact", {})
         selected_services = data.get("selectedServices", [])
         special_requirements = data.get("specialRequirements", "")
-        notes = data.get("notes", "")  # Added notes field
+        notes = data.get("notes", "")
         additional_context = data.get("additionalContext", "")
         
         errors = {}
@@ -125,10 +125,10 @@ def create_concierge_request():
             "last_name": contact["lastName"].strip(),
             "email": normalize_email(contact["email"]),
             "phone": contact["phone"].strip(),
-            "company": contact.get("company", "").strip(),
-            "selected_services": json.dumps(selected_services),  # Store as JSON string
+            "location": contact.get("location", "").strip(),  # Changed from company to location
+            "selected_services": json.dumps(selected_services),
             "special_requirements": special_requirements.strip() if special_requirements else "",
-            "notes": notes.strip() if notes else "",  # Added notes field
+            "notes": notes.strip() if notes else "",
             "additional_context": additional_context.strip() if additional_context else "",
             "source": "concierge_pricing_page",
             "status": "new",
@@ -137,10 +137,10 @@ def create_concierge_request():
             "user_agent": request.headers.get("User-Agent")
         }
         
-        # Insert into database
+        # Insert into database - UPDATED QUERY
         query = """
             INSERT INTO concierge_requests (
-                first_name, last_name, email, phone, company,
+                first_name, last_name, email, phone, location,  -- Changed from company to location
                 selected_services, special_requirements, notes, additional_context,
                 source, status, ip_address, user_agent, created_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -153,7 +153,7 @@ def create_concierge_request():
                 submission_data["last_name"],
                 submission_data["email"],
                 submission_data["phone"],
-                submission_data["company"],
+                submission_data["location"],  # Changed from company to location
                 submission_data["selected_services"],
                 submission_data["special_requirements"],
                 submission_data["notes"],
@@ -169,7 +169,7 @@ def create_concierge_request():
         
         # Add additional data for email notification
         submission_data["id"] = submission_id
-        submission_data["selected_services_list"] = selected_services  # Keep as list for email
+        submission_data["selected_services_list"] = selected_services
         submission_data["service_count"] = len(selected_services)
         
         # Send admin notification in background
@@ -221,10 +221,10 @@ def get_all_concierge_requests():
                 "lastName": req["last_name"],
                 "email": req["email"],
                 "phone": req["phone"],
-                "company": req["company"],
+                "location": req["location"],  # Changed from company to location
                 "selectedServices": selected_services,
                 "specialRequirements": req["special_requirements"],
-                "notes": req["notes"],  # Added notes field
+                "notes": req["notes"],
                 "additionalContext": req["additional_context"],
                 "source": req["source"],
                 "status": req["status"],
@@ -272,10 +272,10 @@ def get_concierge_request(request_id):
                 "lastName": request_data["last_name"],
                 "email": request_data["email"],
                 "phone": request_data["phone"],
-                "company": request_data["company"],
+                "location": request_data["location"],  # Changed from company to location
                 "selectedServices": selected_services,
                 "specialRequirements": request_data["special_requirements"],
-                "notes": request_data["notes"],  # Added notes field
+                "notes": request_data["notes"],
                 "additionalContext": request_data["additional_context"],
                 "source": request_data["source"],
                 "status": request_data["status"],

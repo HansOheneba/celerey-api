@@ -94,7 +94,7 @@ class EmailService:
                 "reply_to": lead_data.get("email"),
                 "tags": [
                     {"name": "category", "value": "lead-notification"},
-                    {"name": "source", "value": lead_data.get("source", "begin_journey")}  # FIXED THIS LINE
+                    {"name": "source", "value": lead_data.get("source", "begin_journey")}
                 ]
             })
             
@@ -348,8 +348,8 @@ Reply to: {lead_data.get('email')}
                         </div>
                         
                         <div class="field">
-                            <span class="field-label">Company:</span>
-                            <span class="field-value">{submission_data.get('company') or 'Not specified'}</span>
+                            <span class="field-label">Location:</span>  <!-- CHANGED FROM Company TO Location -->
+                            <span class="field-value">{submission_data.get('location') or 'Not specified'}</span>
                         </div>
                         
                         <div class="field">
@@ -446,7 +446,7 @@ CLIENT INFORMATION:
 Name:     {submission_data.get('first_name')} {submission_data.get('last_name')}
 Email:    {submission_data.get('email')}
 Phone:    {submission_data.get('phone')}
-Company:  {submission_data.get('company') or 'Not specified'}
+Location: {submission_data.get('location') or 'Not specified'}  <!-- CHANGED FROM Company TO Location -->
 Submitted: {submission_data.get('created_at', 'Just now')}
 
 {services_text}
