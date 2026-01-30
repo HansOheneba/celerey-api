@@ -1,162 +1,151 @@
 from flask import Blueprint, jsonify, request
 from app.database import DBHelper
 from datetime import datetime
+from app.services.email import EmailService
 import re
 
 start_bp = Blueprint("start_bp", __name__, url_prefix="/start")
 
+@start_bp.after_request
+def add_cors_headers(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST')
+    return response
 
+email_service = EmailService()
+
+def send_admin_notification_async(lead_id: int, lead_data: dict):
+    """Send admin notification in background thread"""
+    if not email_service.enabled:
+        return
+    
+    try:
+        result = email_service.send_lead_notification(lead_data)
+        if result.get("ok"):
+            print(f"✓ Admin notification sent for lead {lead_id}")
+        else:
+            print(f"⚠️  Failed to send admin notification for lead {lead_id}: {result.get('error')}")
+    except Exception as e:
+        print(f"✗ Error in notification thread: {str(e)}")
+
+# Helper functions
 def validate_email(email):
-    """Validate basic email format"""
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return re.match(pattern, email) is not None
 
-
 def normalize_email(email):
-    """Normalize email: trim and lowercase"""
     return email.strip().lower()
-
 
 @start_bp.route("/", methods=["POST"])
 def begin_journey():
-    """
-    Capture lead data from BeginJourneyModal
-    
-    Accepts frontend field names:
-    - firstName
-    - lastName
-    - email
-    - phone
-    - timeZone
-    - agree (maps to consent_to_contact in DB)
-    """
+    """Create a new lead"""
     try:
         data = request.get_json()
         
         if not data:
-            return (
-                jsonify({
-                    "ok": False,
-                    "error": "VALIDATION_ERROR",
-                    "details": {"body": "Request body must be valid JSON"}
-                }),
-                400
-            )
+            return jsonify({
+                "ok": False,
+                "error": "VALIDATION_ERROR",
+                "details": {"body": "Request body must be valid JSON"}
+            }), 400
         
-        # Validation
+        # Basic validation
         errors = {}
+        required = ["firstName", "lastName", "email", "phone", "timeZone", "agree"]
         
-        # Required field checks - using frontend field names
-        required_fields = ["firstName", "lastName", "email", "phone", "timeZone", "agree"]
-        for field in required_fields:
-            if field not in data or data[field] is None:
+        for field in required:
+            if not data.get(field):
                 errors[field] = f"{field} is required"
-            elif isinstance(data[field], str) and not data[field].strip():
-                errors[field] = f"{field} cannot be empty"
         
-        # Email validation
-        if "email" in data and data["email"]:
-            email = data["email"].strip()
-            if not validate_email(email):
-                errors["email"] = "Invalid email format"
-        
-        # agree must be true (frontend field name)
-        if "agree" in data:
-            if not isinstance(data.get("agree"), bool):
-                errors["agree"] = "agree must be a boolean"
-            elif not data["agree"]:
-                errors["agree"] = "You must agree to continue"
+        if "email" in data and data["email"] and not validate_email(data["email"]):
+            errors["email"] = "Invalid email format"
         
         if errors:
-            return (
-                jsonify({
-                    "ok": False,
-                    "error": "VALIDATION_ERROR",
-                    "details": errors
-                }),
-                400
-            )
+            return jsonify({
+                "ok": False,
+                "error": "VALIDATION_ERROR",
+                "details": errors
+            }), 400
         
-        # Prepare data for insertion
-        # Keep frontend names for clarity, map to DB column names
-        first_name = data["firstName"].strip()
-        last_name = data["lastName"].strip()
-        email = normalize_email(data["email"])
-        phone = data["phone"].strip()
-        time_zone = data["timeZone"].strip()
-        consent_to_contact = data["agree"]  # Map 'agree' to 'consent_to_contact'
-        
-        
-        # Metadata
-        ip_address = request.remote_addr
-        user_agent = request.headers.get("User-Agent")
-        source = "begin_journey_modal"
-        status = "new"
-        created_at = datetime.now()
+        # Prepare data
+        lead_data = {
+            "first_name": data["firstName"].strip(),
+            "last_name": data["lastName"].strip(),
+            "email": normalize_email(data["email"]),
+            "phone": data["phone"].strip(),
+            "time_zone": data["timeZone"].strip(),
+            "consent_to_contact": data["agree"],
+            "source": "begin_journey_modal",
+            "status": "new",
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ip_address": request.remote_addr,
+            "user_agent": request.headers.get("User-Agent")
+        }
         
         # Insert into database
-        # Include optional fields in query even if not used currently
-        insert_query = """
+        query = """
             INSERT INTO support_leads (
                 first_name, last_name, email, phone,
                 time_zone, consent_to_contact,
-                offer_id, price_label,
                 source, status,
                 ip_address, user_agent,
                 created_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         
         lead_id = DBHelper.execute_query(
-            insert_query,
+            query,
             (
-                first_name,
-                last_name,
-                email,
-                phone,
-                time_zone,
-                consent_to_contact,
-                source,
-                status,
-                ip_address,
-                user_agent,
-                created_at
+                lead_data["first_name"],
+                lead_data["last_name"],
+                lead_data["email"],
+                lead_data["phone"],
+                lead_data["time_zone"],
+                lead_data["consent_to_contact"],
+                lead_data["source"],
+                lead_data["status"],
+                lead_data["ip_address"],
+                lead_data["user_agent"],
+                datetime.now()
             ),
             lastrowid=True
         )
         
-        return (
-            jsonify({
-                "ok": True,
-                "leadId": lead_id,
-                "message": "Thanks — we'll reach out via email shortly."
-            }),
-            201
-        )
+        # Add ID to lead data for email notification
+        lead_data["id"] = lead_id
+        
+        # Send admin notification in background
+        if email_service.enabled and email_service.admin_emails:
+            thread = threading.Thread(
+                target=send_admin_notification_async,
+                args=(lead_id, lead_data)
+            )
+            thread.daemon = True
+            thread.start()
+            print(f"Started admin notification for lead {lead_id}")
+        else:
+            print(f"No email notification sent for lead {lead_id} (service disabled or no recipients)")
+        
+        return jsonify({
+            "ok": True,
+            "leadId": lead_id,
+            "message": "Thanks — we'll reach out via email shortly."
+        }), 201
     
     except Exception as e:
         print(f"Error in begin_journey: {str(e)}")
-        return (
-            jsonify({
-                "ok": False,
-                "error": "SERVER_ERROR",
-                "message": "Something went wrong. Please try again."
-            }),
-            500
-        )
-
+        return jsonify({
+            "ok": False,
+            "error": "SERVER_ERROR",
+            "message": "Something went wrong. Please try again."
+        }), 500
 
 @start_bp.route("/", methods=["GET"])
 def get_all_leads():
-    """Get all support leads - returns all fields"""
+    """Get all leads"""
     try:
-        query = """
-            SELECT *
-            FROM support_leads
-            ORDER BY created_at DESC
-        """
-        
+        query = "SELECT * FROM support_leads ORDER BY created_at DESC"
         leads = DBHelper.execute_query(query, fetch_all=True)
         
         formatted_leads = []
@@ -168,85 +157,83 @@ def get_all_leads():
                 "email": lead["email"],
                 "phone": lead["phone"],
                 "timeZone": lead["time_zone"],
-                "agree": bool(lead["consent_to_contact"]),  # Map back to frontend name
-  
+                "agree": bool(lead["consent_to_contact"]),
                 "source": lead["source"],
                 "status": lead["status"],
-                "ipAddress": lead["ip_address"],
-                "userAgent": lead["user_agent"],
-                "internalNotes": lead["internal_notes"],
-                "createdAt": DBHelper.format_datetime(lead["created_at"]) if hasattr(DBHelper, 'format_datetime') else str(lead["created_at"])
+                "createdAt": str(lead["created_at"])
             })
         
-        return jsonify({"ok": True, "leads": formatted_leads}), 200
+        return jsonify({
+            "ok": True,
+            "leads": formatted_leads,
+            "count": len(formatted_leads)
+        }), 200
     
     except Exception as e:
         print(f"Error in get_all_leads: {str(e)}")
-        return (
-            jsonify({
-                "ok": False,
-                "error": "SERVER_ERROR",
-                "message": "Something went wrong. Please try again."
-            }),
-            500
-        )
-
+        return jsonify({
+            "ok": False,
+            "error": "SERVER_ERROR",
+            "message": "Something went wrong."
+        }), 500
 
 @start_bp.route("/<int:lead_id>", methods=["GET"])
 def get_lead(lead_id):
-    """
-    Retrieve a support lead by ID
-    Returns fields with frontend naming convention
-    """
+    """Get a single lead"""
     try:
-        query = """
-            SELECT id, first_name, last_name, email, phone,
-                   time_zone, consent_to_contact,
-                   offer_id, price_label,
-                   source, status,
-                   ip_address, user_agent,
-                   internal_notes,
-                   created_at
-            FROM support_leads
-            WHERE id = %s
-        """
-        
+        query = "SELECT * FROM support_leads WHERE id = %s"
         lead = DBHelper.execute_query(query, (lead_id,), fetch_one=True)
         
         if not lead:
             return jsonify({"ok": False, "error": "Lead not found"}), 404
         
-        return (
-            jsonify({
-                "ok": True,
-                "lead": {
-                    "id": lead["id"],
-                    "firstName": lead["first_name"],
-                    "lastName": lead["last_name"],
-                    "email": lead["email"],
-                    "phone": lead["phone"],
-                    "timeZone": lead["time_zone"],
-                    "agree": bool(lead["consent_to_contact"]),  # Frontend field name
-                   
-                
-                    "source": lead["source"],
-                    "status": lead["status"],
-                    "ipAddress": lead["ip_address"],
-                    "userAgent": lead["user_agent"],
-                    "internalNotes": lead["internal_notes"],
-                    "createdAt": DBHelper.format_datetime(lead["created_at"]) if hasattr(DBHelper, 'format_datetime') else str(lead["created_at"])
-                }
-            }),
-            200
-        )
+        return jsonify({
+            "ok": True,
+            "lead": {
+                "id": lead["id"],
+                "firstName": lead["first_name"],
+                "lastName": lead["last_name"],
+                "email": lead["email"],
+                "phone": lead["phone"],
+                "timeZone": lead["time_zone"],
+                "agree": bool(lead["consent_to_contact"]),
+                "source": lead["source"],
+                "status": lead["status"],
+                "createdAt": str(lead["created_at"])
+            }
+        }), 200
     
     except Exception as e:
         print(f"Error in get_lead: {str(e)}")
-        return (
-            jsonify({
-                "ok": False,
-                "error": "SERVER_ERROR",
-                "message": "Something went wrong. Please try again."
-            }),
-            500
-        )
+        return jsonify({
+            "ok": False,
+            "error": "SERVER_ERROR",
+            "message": "Something went wrong."
+        }), 500
+    
+    
+@start_bp.route("/", methods=["GET"])
+def get_all_leads():
+    """Get all leads"""
+    try:
+        leads = DBHelper.execute_query("SELECT * FROM support_leads ORDER BY created_at DESC", fetch_all=True)
+        
+        # Simple formatting
+        formatted = []
+        for lead in leads:
+            formatted.append({
+                "id": lead["id"],
+                "firstName": lead["first_name"],
+                "lastName": lead["last_name"],
+                "email": lead["email"],
+                "phone": lead["phone"],
+                "timeZone": lead["time_zone"],
+                "status": lead["status"],
+                "createdAt": str(lead["created_at"])
+            })
+        
+        return jsonify({"ok": True, "leads": formatted}), 200
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
