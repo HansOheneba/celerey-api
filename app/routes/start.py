@@ -4,12 +4,8 @@ from datetime import datetime
 from app.services.email import EmailService
 import re
 import threading
-import time
 
 start_bp = Blueprint("start_bp", __name__)
-
-# Global list to track active threads
-active_lead_threads = []
 
 @start_bp.after_request
 def add_cors_headers(response):
@@ -21,13 +17,11 @@ def add_cors_headers(response):
 
 email_service = EmailService()
 
-def send_admin_notification_async(lead_id: int, lead_data: dict):
-    """Send admin notification in background thread"""
+def send_admin_notification(lead_id: int, lead_data: dict):
+    """Send admin notification synchronously"""
     if not email_service.enabled:
+        print(f"Email service disabled for lead {lead_id}")
         return
-    
-    # Small delay to ensure Flask response is sent first
-    time.sleep(0.5)
     
     try:
         result = email_service.send_lead_notification(lead_data)
@@ -36,12 +30,7 @@ def send_admin_notification_async(lead_id: int, lead_data: dict):
         else:
             print(f"⚠️  Failed to send admin notification for lead {lead_id}: {result.get('error')}")
     except Exception as e:
-        print(f"✗ Error in notification thread: {str(e)}")
-
-def cleanup_completed_threads():
-    """Clean up completed threads from the global list"""
-    global active_lead_threads
-    active_lead_threads = [t for t in active_lead_threads if t.is_alive()]
+        print(f"✗ Error sending lead notification: {str(e)}")
 
 # Helper functions
 def validate_email(email):
@@ -129,28 +118,36 @@ def begin_journey():
         # Add ID to lead data for email notification
         lead_data["id"] = lead_id
         
-        # Send admin notification in background
+        # Send admin notification synchronously (but fast)
         if email_service.enabled and email_service.admin_emails:
-            thread = threading.Thread(
-                target=send_admin_notification_async,
-                args=(lead_id, lead_data),
-                name=f"lead-email-{lead_id}"
-            )
-            thread.daemon = False  # Keep thread alive until completion
+            print(f"Sending admin notification for lead {lead_id}")
             
-            # Clean up old threads before starting new one
-            cleanup_completed_threads()
-            
-            # Add to global tracking
-            active_lead_threads.append(thread)
-            
-            thread.start()
-            
-            # Wait a tiny bit to ensure thread starts (non-blocking)
-            time.sleep(0.1)
-            
-            print(f"Started admin notification for lead {lead_id}")
-            print(f"Active lead threads: {len([t for t in active_lead_threads if t.is_alive()])}")
+            # Try synchronous sending first
+            try:
+                result = email_service.send_lead_notification(lead_data)
+                if result.get("ok"):
+                    print(f"✓ Admin notification sent synchronously for lead {lead_id}")
+                else:
+                    print(f"⚠️ Failed to send admin notification for lead {lead_id}: {result.get('error')}")
+                    
+                    # If sync fails, try async as fallback
+                    thread = threading.Thread(
+                        target=send_admin_notification,
+                        args=(lead_id, lead_data),
+                        daemon=False
+                    )
+                    thread.start()
+                    print(f"Fallback: Started async notification for lead {lead_id}")
+                    
+            except Exception as e:
+                print(f"✗ Sync email error, trying async: {str(e)}")
+                # Fall back to async
+                thread = threading.Thread(
+                    target=send_admin_notification,
+                    args=(lead_id, lead_data),
+                    daemon=False
+                )
+                thread.start()
         else:
             print(f"No email notification sent for lead {lead_id} (service disabled or no recipients)")
         

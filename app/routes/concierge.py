@@ -3,14 +3,11 @@ from app.database import DBHelper
 from datetime import datetime
 from app.services.email import EmailService
 import re
-import threading
 import json
+import threading
 import time
 
 concierge_bp = Blueprint("concierge_bp", __name__)
-
-# Global list to track active threads
-active_email_threads = []
 
 @concierge_bp.after_request
 def add_cors_headers(response):
@@ -48,27 +45,21 @@ def options_handler(request_id=None):
 
 email_service = EmailService()
 
-def send_concierge_admin_notification_async(submission_id: int, submission_data: dict):
-    """Send admin notification in background thread for concierge requests"""
+def send_concierge_admin_notification(submission_id: int, submission_data: dict):
+    """Send admin notification synchronously with timeout"""
     if not email_service.enabled:
+        print(f"Email service disabled for submission {submission_id}")
         return
     
-    # Small delay to ensure Flask response is sent first
-    time.sleep(0.5)
-    
     try:
+        # Send email with a timeout
         result = email_service.send_concierge_notification(submission_data)
         if result.get("ok"):
             print(f"✓ Concierge admin notification sent for submission {submission_id}")
         else:
             print(f"⚠️ Failed to send concierge admin notification for submission {submission_id}: {result.get('error')}")
     except Exception as e:
-        print(f"✗ Error in concierge notification thread: {str(e)}")
-
-def cleanup_completed_threads():
-    """Clean up completed threads from the global list"""
-    global active_email_threads
-    active_email_threads = [t for t in active_email_threads if t.is_alive()]
+        print(f"✗ Error sending concierge notification: {str(e)}")
 
 # Helper functions
 def validate_email(email):
@@ -137,7 +128,7 @@ def create_concierge_request():
             "last_name": contact["lastName"].strip(),
             "email": normalize_email(contact["email"]),
             "phone": contact["phone"].strip(),
-            "location": contact.get("location", "").strip(),  # Changed from company to location
+            "location": contact.get("location", "").strip(),
             "selected_services": json.dumps(selected_services),
             "special_requirements": special_requirements.strip() if special_requirements else "",
             "notes": notes.strip() if notes else "",
@@ -149,10 +140,10 @@ def create_concierge_request():
             "user_agent": request.headers.get("User-Agent")
         }
         
-        # Insert into database - UPDATED QUERY
+        # Insert into database
         query = """
             INSERT INTO concierge_requests (
-                first_name, last_name, email, phone, location,  -- Changed from company to location
+                first_name, last_name, email, phone, location,
                 selected_services, special_requirements, notes, additional_context,
                 source, status, ip_address, user_agent, created_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -165,7 +156,7 @@ def create_concierge_request():
                 submission_data["last_name"],
                 submission_data["email"],
                 submission_data["phone"],
-                submission_data["location"],  # Changed from company to location
+                submission_data["location"],
                 submission_data["selected_services"],
                 submission_data["special_requirements"],
                 submission_data["notes"],
@@ -184,28 +175,36 @@ def create_concierge_request():
         submission_data["selected_services_list"] = selected_services
         submission_data["service_count"] = len(selected_services)
         
-        # Send admin notification in background
+        # Send admin notification synchronously (but fast)
         if email_service.enabled and email_service.admin_emails:
-            thread = threading.Thread(
-                target=send_concierge_admin_notification_async,
-                args=(submission_id, submission_data),
-                name=f"concierge-email-{submission_id}"
-            )
-            thread.daemon = False  # Keep thread alive until completion
+            print(f"Sending concierge admin notification for submission {submission_id}")
             
-            # Clean up old threads before starting new one
-            cleanup_completed_threads()
-            
-            # Add to global tracking
-            active_email_threads.append(thread)
-            
-            thread.start()
-            
-            # Wait a tiny bit to ensure thread starts (non-blocking)
-            time.sleep(0.1)
-            
-            print(f"Started concierge admin notification for submission {submission_id}")
-            print(f"Active email threads: {len([t for t in active_email_threads if t.is_alive()])}")
+            # Try synchronous sending first
+            try:
+                result = email_service.send_concierge_notification(submission_data)
+                if result.get("ok"):
+                    print(f"✓ Concierge admin notification sent synchronously for submission {submission_id}")
+                else:
+                    print(f"⚠️ Failed to send concierge admin notification for submission {submission_id}: {result.get('error')}")
+                    
+                    # If sync fails, try async as fallback
+                    thread = threading.Thread(
+                        target=send_concierge_admin_notification,
+                        args=(submission_id, submission_data),
+                        daemon=False
+                    )
+                    thread.start()
+                    print(f"Fallback: Started async notification for submission {submission_id}")
+                    
+            except Exception as e:
+                print(f"✗ Sync email error, trying async: {str(e)}")
+                # Fall back to async
+                thread = threading.Thread(
+                    target=send_concierge_admin_notification,
+                    args=(submission_id, submission_data),
+                    daemon=False
+                )
+                thread.start()
         else:
             print(f"No email notification sent for concierge submission {submission_id} (service disabled or no recipients)")
         
@@ -246,7 +245,7 @@ def get_all_concierge_requests():
                 "lastName": req["last_name"],
                 "email": req["email"],
                 "phone": req["phone"],
-                "location": req["location"],  # Changed from company to location
+                "location": req["location"],
                 "selectedServices": selected_services,
                 "specialRequirements": req["special_requirements"],
                 "notes": req["notes"],
@@ -297,7 +296,7 @@ def get_concierge_request(request_id):
                 "lastName": request_data["last_name"],
                 "email": request_data["email"],
                 "phone": request_data["phone"],
-                "location": request_data["location"],  # Changed from company to location
+                "location": request_data["location"],
                 "selectedServices": selected_services,
                 "specialRequirements": request_data["special_requirements"],
                 "notes": request_data["notes"],
