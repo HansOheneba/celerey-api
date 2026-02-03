@@ -43,11 +43,30 @@ def after_request(response):
     """Apply CORS headers to all responses"""
     return add_cors_headers(response)
 
-# Helper decorator for validating user_id
+
 def require_user_id(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        user_id = request.args.get('user_id') or request.json.get('user_id') if request.is_json else None
+        # Handle OPTIONS requests for CORS preflight
+        if request.method == 'OPTIONS':
+            return f(*args, **kwargs)
+        
+        # Try to get user_id from different sources
+        user_id = None
+        
+        # Check URL query parameters first (for GET requests)
+        if request.method == 'GET':
+            user_id = request.args.get('user_id')
+        # Check JSON body for POST/PUT/DELETE
+        elif request.is_json:
+            user_id = request.json.get('user_id')
+        
+        # If still not found, try from form data
+        if not user_id and request.form:
+            user_id = request.form.get('user_id')
+        
+        # Debug logging
+        print(f"require_user_id: method={request.method}, user_id={user_id}, args={request.args}, json={request.is_json}")
         
         if not user_id:
             return jsonify({
@@ -56,20 +75,24 @@ def require_user_id(f):
                 "message": "User ID is required"
             }), 400
         
+        # Clean up user_id (remove any whitespace)
+        user_id = user_id.strip()
+        
         # Verify user exists
         user_query = "SELECT id FROM users WHERE id = %s"
         user = DBHelper.execute_query(user_query, (user_id,), fetch_one=True)
         
         if not user:
+            print(f"require_user_id: User not found: {user_id}")
             return jsonify({
                 "ok": False,
                 "error": "USER_NOT_FOUND",
                 "message": "User does not exist"
             }), 404
-            
+        
+        print(f"require_user_id: User verified: {user_id}")
         return f(user_id, *args, **kwargs)
     return decorated_function
-
 @billing_bp.route("/checkout", methods=["POST"])
 def create_checkout_session():
     """Create a Stripe Checkout session"""
