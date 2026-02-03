@@ -12,8 +12,7 @@ def add_cors_headers(response):
     origin = request.headers.get("Origin", "")
     allowed_origins = {
         "http://localhost:3000",
-        "https://celerey.com",
-        "https://www.celerey.com",
+        "https://https://celereyv2.vercel.app/",
     }
     if origin in allowed_origins:
         response.headers["Access-Control-Allow-Origin"] = origin
