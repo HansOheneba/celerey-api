@@ -1,3 +1,4 @@
+
 from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -61,6 +62,7 @@ def create_app():
     from app.routes.services import services_bp
     from app.routes.start import start_bp
     from app.routes.concierge import concierge_bp
+    from app.routes.billing import billing_bp  # NEW: Add billing blueprint
 
     app.register_blueprint(insights_bp, url_prefix="/api/insights")
     app.register_blueprint(podcasts_bp, url_prefix="/api/podcasts")
@@ -72,6 +74,7 @@ def create_app():
     app.register_blueprint(services_bp, url_prefix="/api/services")
     app.register_blueprint(start_bp, url_prefix="/api/start")
     app.register_blueprint(concierge_bp, url_prefix="/api/concierge")
+    app.register_blueprint(billing_bp, url_prefix="/api/billing")  # NEW: Register billing routes
 
     return app
 
