@@ -13,28 +13,35 @@ STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://celereyv2.vercel.app")
 
-# Add CORS headers (following your pattern)
-@billing_bp.after_request
 def add_cors_headers(response):
-    """Add CORS headers to all responses"""
-    # Allow specific origins (matching your existing setup)
+    """Add CORS headers to response"""
+    origin = request.headers.get("Origin", "")
     allowed_origins = [
         "http://localhost:3000",
-        "http://127.0.0.1:3000", 
         "https://celereyv2.vercel.app",
         "https://celerey-api.vercel.app"
     ]
     
-    origin = request.headers.get('Origin')
     if origin in allowed_origins:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-    
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
-    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    response.headers.add('Access-Control-Max-Age', '86400')
-    
+        response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Vary"] = "Origin"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Headers"] = request.headers.get("Access-Control-Request-Headers", "Content-Type, Authorization, X-Requested-With")
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Max-Age"] = "3600"
     return response
+
+@billing_bp.before_request
+def handle_preflight():
+    """Handle preflight OPTIONS requests"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 204)
+        return add_cors_headers(response)
+
+@billing_bp.after_request
+def after_request(response):
+    """Apply CORS headers to all responses"""
+    return add_cors_headers(response)
 
 # Helper decorator for validating user_id
 def require_user_id(f):
@@ -63,12 +70,9 @@ def require_user_id(f):
         return f(user_id, *args, **kwargs)
     return decorated_function
 
-@billing_bp.route("/checkout", methods=["POST", "OPTIONS"])
+@billing_bp.route("/checkout", methods=["POST"])
 def create_checkout_session():
     """Create a Stripe Checkout session"""
-    if request.method == "OPTIONS":
-        return make_response(("", 200))
-    
     try:
         data = request.get_json()
         
@@ -122,7 +126,8 @@ def create_checkout_session():
             metadata={
                 "user_id": str(user_id)
             },
-            customer_email=user.get("email"),  # Pre-fill email if available
+            customer_email=user.get("email"),
+            allow_promotion_codes=True, 
             expires_at=int((datetime.now().timestamp() + 3600)),  # 1 hour expiry
         )
         
@@ -251,13 +256,10 @@ def handle_webhook():
     # Return success for other event types
     return jsonify({"ok": True, "message": "Event received"}), 200
 
-@billing_bp.route("/access", methods=["GET", "OPTIONS"])
+@billing_bp.route("/access", methods=["GET"])
 @require_user_id
 def check_access(user_id):
     """Check if user has paid access"""
-    if request.method == "OPTIONS":
-        return make_response(("", 200))
-    
     try:
         # Always read from database (not Stripe)
         query = """
@@ -293,13 +295,10 @@ def check_access(user_id):
             "message": "Something went wrong."
         }), 500
 
-@billing_bp.route("/status", methods=["GET", "OPTIONS"])
+@billing_bp.route("/status", methods=["GET"])
 @require_user_id
 def get_payment_status(user_id):
     """Get detailed payment status"""
-    if request.method == "OPTIONS":
-        return make_response(("", 200))
-    
     try:
         query = """
             SELECT 
