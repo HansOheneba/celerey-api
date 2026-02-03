@@ -9,10 +9,19 @@ start_bp = Blueprint("start_bp", __name__)
 
 def add_cors_headers(response):
     """Add CORS headers to response"""
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Max-Age'] = '3600'
+    origin = request.headers.get("Origin", "")
+    allowed_origins = {
+        "http://localhost:3000",
+        "https://celerey.com",
+        "https://www.celerey.com",
+    }
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Max-Age"] = "3600"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
 @start_bp.before_request
