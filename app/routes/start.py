@@ -7,13 +7,25 @@ import threading
 
 start_bp = Blueprint("start_bp", __name__)
 
-@start_bp.after_request
 def add_cors_headers(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    """Add CORS headers to response"""
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Max-Age'] = '3600'
     return response
+
+@start_bp.before_request
+def handle_preflight():
+    """Handle preflight OPTIONS requests"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 204)
+        return add_cors_headers(response)
+
+@start_bp.after_request
+def after_request(response):
+    """Apply CORS headers to all responses"""
+    return add_cors_headers(response)
 
 email_service = EmailService()
 
@@ -238,4 +250,5 @@ def get_lead(lead_id):
 @start_bp.route("/", methods=["OPTIONS"])
 def options_root():
     """Handle preflight OPTIONS request"""
-    return make_response(("", 200))
+    response = make_response('', 204)
+    return add_cors_headers(response)
